@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math; // Импортируем математику для sqrt
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'quadratic_cubit.dart';
+import 'quadratic_state.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,36 +13,33 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Квадратные уравнения',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const InputScreen(),
+      theme: ThemeData(primarySwatch: Colors.pink),
+      home: BlocProvider(
+        create: (context) => QuadraticCubit(),
+        child: const MainScreen(),
+      ),
     );
   }
 }
 
-// ============ ПЕРВЫЙ ЭКРАН ============
-class InputScreen extends StatefulWidget {
-  const InputScreen({super.key});
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  State<InputScreen> createState() => _InputScreenState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _InputScreenState extends State<InputScreen> {
-  // Контроллеры для полей ввода
+class _MainScreenState extends State<MainScreen> {
   final TextEditingController _aController = TextEditingController();
   final TextEditingController _bController = TextEditingController();
   final TextEditingController _cController = TextEditingController();
-
-  // Состояние чек-бокса
   bool _isAgreed = false;
-
-  // Ключ для формы (для валидации)
   final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
-    // Освобождаем ресурсы
     _aController.dispose();
     _bController.dispose();
     _cController.dispose();
@@ -51,267 +50,182 @@ class _InputScreenState extends State<InputScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Хусейнова Дарья Анатольевна'), 
-        backgroundColor: const Color.fromARGB(255, 223, 144, 209),
+        title: const Text('Хусейнова Дарья Анатольевна'),
+        backgroundColor: Colors.pink,
+        foregroundColor: Colors.white,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Введите коэффициенты уравнения ax² + bx + c = 0',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
+      body: BlocConsumer<QuadraticCubit, QuadraticState>(
+        listener: (context, state) {
+          // Показываем ошибку через SnackBar
+          if (state is QuadraticError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
               ),
-              const SizedBox(height: 20),
+            );
+          }
+        },
+        builder: (context, state) {
+          // Если состояние — начальное или ошибка, показываем форму
+          if (state is QuadraticInitial || state is QuadraticError) {
+            return _buildInputForm();
+          }
+          // Если состояние — результат, показываем результат
+          if (state is QuadraticResult) {
+            return _buildResultView(state);
+          }
+          return const Center(child: CircularProgressIndicator());
+        },
+      ),
+    );
+  }
 
-              // Поле ввода a
-              TextFormField(
-                controller: _aController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Коэффициент a',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calculate),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Введите коэффициент a';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Введите корректное число';
-                  }
-                  if (double.parse(value) == 0) {
-                    return 'Коэффициент a не может быть равен 0';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Поле ввода b
-              TextFormField(
-                controller: _bController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Коэффициент b',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calculate),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Введите коэффициент b';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Введите корректное число';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Поле ввода c
-              TextFormField(
-                controller: _cController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Коэффициент c',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calculate),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Введите коэффициент c';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Введите корректное число';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Чек-бокс согласия
-              CheckboxListTile(
-                title: const Text('Согласен на обработку данных'),
-                value: _isAgreed,
-                onChanged: (bool? value) {
-                  setState(() {
-                    _isAgreed = value ?? false;
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-
-              const SizedBox(height: 20),
-
-              // Кнопка "Вычислить"
-              ElevatedButton(
-                onPressed: () {
-                  // Валидация формы
-                  if (_formKey.currentState!.validate()) {
-                    // Проверка чек-бокса
-                    if (!_isAgreed) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Необходимо согласие на обработку данных'),
-                          backgroundColor: Colors.red,
-                        ),
+  // Форма ввода
+  Widget _buildInputForm() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Введите коэффициенты уравнения ax² + bx + c = 0',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            _buildNumberField(_aController, 'Коэффициент a', true),
+            const SizedBox(height: 16),
+            _buildNumberField(_bController, 'Коэффициент b', false),
+            const SizedBox(height: 16),
+            _buildNumberField(_cController, 'Коэффициент c', false),
+            const SizedBox(height: 16),
+            CheckboxListTile(
+              title: const Text('Согласен на обработку данных'),
+              value: _isAgreed,
+              onChanged: (v) => setState(() => _isAgreed = v ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                if (_formKey.currentState!.validate()) {
+                  context.read<QuadraticCubit>().calculate(
+                        a: double.parse(_aController.text),
+                        b: double.parse(_bController.text),
+                        c: double.parse(_cController.text),
+                        isAgreed: _isAgreed,
                       );
-                      return;
-                    }
-
-                    // Получаем значения
-                    double a = double.parse(_aController.text);
-                    double b = double.parse(_bController.text);
-                    double c = double.parse(_cController.text);
-
-                    // Переходим на второй экран, передавая данные
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ResultScreen(a: a, b: b, c: c),
-                      ),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'Вычислить корни',
-                  style: TextStyle(fontSize: 18),
-                ),
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Colors.pink,
+                foregroundColor: Colors.white,
               ),
-            ],
-          ),
+              child:
+                  const Text('Вычислить корни', style: TextStyle(fontSize: 18)),
+            ),
+          ],
         ),
       ),
     );
   }
-}
 
-// ============ ВТОРОЙ ЭКРАН ============
-class ResultScreen extends StatelessWidget {
-  final double a;
-  final double b;
-  final double c;
+  // Поле ввода
+  Widget _buildNumberField(
+      TextEditingController controller, String label, bool isA) {
+    return TextFormField(
+      controller: controller,
+      keyboardType:
+          const TextInputType.numberWithOptions(decimal: true, signed: true),
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.calculate),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) return 'Введите $label';
+        if (double.tryParse(value) == null) return 'Введите корректное число';
+        if (isA && double.parse(value) == 0) {
+          return 'Коэффициент a не может быть 0';
+        }
+        return null;
+      },
+    );
+  }
 
-  const ResultScreen({
-    super.key,
-    required this.a,
-    required this.b,
-    required this.c,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Вычисляем дискриминант
-    double discriminant = b * b - 4 * a * c;
-
-    String resultText;
-    IconData resultIcon;
-    Color resultColor;
-
-    if (discriminant > 0) {
-      // Два корня
-      double x1 = (-b + math.sqrt(discriminant)) / (2 * a);
-      double x2 = (-b - math.sqrt(discriminant)) / (2 * a);
-      resultText = 'Уравнение имеет два корня:\n\nx₁ = ${x1.toStringAsFixed(3)}\n\nx₂ = ${x2.toStringAsFixed(3)}';
-      resultIcon = Icons.check_circle;
-      resultColor = Colors.green;
-    } else if (discriminant == 0) {
-      // Один корень
-      double x = -b / (2 * a);
-      resultText = 'Уравнение имеет один корень:\n\nx = ${x.toStringAsFixed(3)}';
-      resultIcon = Icons.info;
-      resultColor = Colors.orange;
+  // Экран результата
+  Widget _buildResultView(QuadraticResult state) {
+    IconData icon;
+    Color color;
+    if (state.resultType == 'two') {
+      icon = Icons.check_circle;
+      color = Colors.green;
+    } else if (state.resultType == 'one') {
+      icon = Icons.info;
+      color = Colors.orange;
     } else {
-      // Корней нет
-      resultText = 'Уравнение не имеет действительных корней\n\n(D < 0)';
-      resultIcon = Icons.cancel;
-      resultColor = Colors.red;
+      icon = Icons.cancel;
+      color = Colors.red;
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Результат'),
-        backgroundColor: Colors.blue,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Отображение введенных коэффициентов
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Введённые коэффициенты:',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('a = $a,  b = $b,  c = $c', style: const TextStyle(fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Дискриминант D = ${discriminant.toStringAsFixed(3)}',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  const Text(
+                    'Введённые коэффициенты:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'a = ${state.a},  b = ${state.b},  c = ${state.c}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Дискриминант D = ${state.discriminant.toStringAsFixed(3)}',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
             ),
-
-            const SizedBox(height: 30),
-
-            // Иконка результата
-            Icon(resultIcon, size: 80, color: resultColor),
-
-            const SizedBox(height: 20),
-
-            // Текст результата
-            Text(
-              resultText,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: resultColor,
-              ),
+          ),
+          const SizedBox(height: 30),
+          Icon(icon, size: 80, color: color),
+          const SizedBox(height: 20),
+          Text(
+            state.resultText,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold, color: color),
+          ),
+          const SizedBox(height: 40),
+          ElevatedButton.icon(
+            onPressed: () {
+              context.read<QuadraticCubit>().reset();
+            },
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Вернуться назад'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: const Color.fromARGB(255, 236, 147, 177),
+              foregroundColor: Colors.white,
             ),
-
-            const SizedBox(height: 40),
-
-            // Кнопка "Назад"
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Вернуться назад'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
