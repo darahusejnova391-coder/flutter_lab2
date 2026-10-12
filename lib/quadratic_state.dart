@@ -21,3 +21,13 @@ class QuadraticError extends QuadraticState {
   final String message;
   QuadraticError(this.message);
 }
+abstract class HistoryState {}
+
+class HistoryLoading extends HistoryState {}
+
+class HistoryLoaded extends HistoryState {
+  final List<dynamic> calculations;
+  HistoryLoaded(this.calculations);
+}
+
+class HistoryEmpty extends HistoryState {}

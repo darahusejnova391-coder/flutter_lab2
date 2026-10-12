@@ -1,9 +1,19 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'quadratic_cubit.dart';
 import 'quadratic_state.dart';
+import 'calculation.dart';
 
 void main() {
+  // Если запущено в браузере — переключаем фабрику на web-версию
+  if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
+  }
   runApp(const MyApp());
 }
 
@@ -39,6 +49,26 @@ class _MainScreenState extends State<MainScreen> {
   final _formKey = GlobalKey<FormState>();
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedData();
+  }
+
+  // Загружаем сохранённые данные из SharedPreferences
+  Future<void> _loadSavedData() async {
+    final cubit = context.read<QuadraticCubit>();
+    final coeffs = await cubit.loadLastCoefficients();
+    final agreed = await cubit.loadIsAgreed();
+    if (!mounted) return;
+    setState(() {
+      if (coeffs['a'] != null) _aController.text = coeffs['a'].toString();
+      if (coeffs['b'] != null) _bController.text = coeffs['b'].toString();
+      if (coeffs['c'] != null) _cController.text = coeffs['c'].toString();
+      _isAgreed = agreed;
+    });
+  }
+
+  @override
   void dispose() {
     _aController.dispose();
     _bController.dispose();
@@ -50,13 +80,28 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Хусейнова Дарья Анатольевна'),
+        // Кнопка истории в leading
+        leading: IconButton(
+          icon: const Icon(Icons.history),
+          tooltip: 'История расчётов',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => BlocProvider(
+                  create: (_) => HistoryCubit()..loadHistory(),
+                  child: const HistoryScreen(),
+                ),
+              ),
+            );
+          },
+        ),
+        title: const Text('Хусейнова Дарья Анатольевна'), 
         backgroundColor: Colors.pink,
         foregroundColor: Colors.white,
       ),
       body: BlocConsumer<QuadraticCubit, QuadraticState>(
         listener: (context, state) {
-          // Показываем ошибку через SnackBar
           if (state is QuadraticError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -67,11 +112,9 @@ class _MainScreenState extends State<MainScreen> {
           }
         },
         builder: (context, state) {
-          // Если состояние — начальное или ошибка, показываем форму
           if (state is QuadraticInitial || state is QuadraticError) {
             return _buildInputForm();
           }
-          // Если состояние — результат, показываем результат
           if (state is QuadraticResult) {
             return _buildResultView(state);
           }
@@ -81,7 +124,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Форма ввода
   Widget _buildInputForm() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -134,7 +176,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Поле ввода
   Widget _buildNumberField(
       TextEditingController controller, String label, bool isA) {
     return TextFormField(
@@ -157,7 +198,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Экран результата
   Widget _buildResultView(QuadraticResult state) {
     IconData icon;
     Color color;
@@ -166,10 +206,10 @@ class _MainScreenState extends State<MainScreen> {
       color = Colors.green;
     } else if (state.resultType == 'one') {
       icon = Icons.info;
-      color = Colors.orange;
+      color = const Color.fromARGB(255, 227, 30, 155);
     } else {
       icon = Icons.cancel;
-      color = Colors.red;
+      color = const Color.fromARGB(255, 214, 201, 200);
     }
 
     return Padding(
@@ -184,21 +224,17 @@ class _MainScreenState extends State<MainScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  const Text(
-                    'Введённые коэффициенты:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  const Text('Введённые коэффициенты:',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text('a = ${state.a},  b = ${state.b},  c = ${state.c}',
+                      style: const TextStyle(fontSize: 16)),
                   const SizedBox(height: 8),
                   Text(
-                    'a = ${state.a},  b = ${state.b},  c = ${state.c}',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Дискриминант D = ${state.discriminant.toStringAsFixed(3)}',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                      'Дискриминант D = ${state.discriminant.toStringAsFixed(3)}',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -214,18 +250,87 @@ class _MainScreenState extends State<MainScreen> {
           ),
           const SizedBox(height: 40),
           ElevatedButton.icon(
-            onPressed: () {
-              context.read<QuadraticCubit>().reset();
-            },
+            onPressed: () => context.read<QuadraticCubit>().reset(),
             icon: const Icon(Icons.arrow_back),
             label: const Text('Вернуться назад'),
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: const Color.fromARGB(255, 236, 147, 177),
+              backgroundColor: Colors.pink,
               foregroundColor: Colors.white,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ============ ЭКРАН ИСТОРИИ ============
+class HistoryScreen extends StatelessWidget {
+  const HistoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('История расчётов'),
+        backgroundColor: Colors.pink,
+        foregroundColor: Colors.white,
+      ),
+      body: BlocBuilder<HistoryCubit, HistoryState>(
+        builder: (context, state) {
+          if (state is HistoryLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (state is HistoryEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history, size: 80, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('История пуста',
+                      style: TextStyle(fontSize: 18, color: Colors.grey)),
+                ],
+              ),
+            );
+          }
+          if (state is HistoryLoaded) {
+            final records = state.calculations as List<Calculation>;
+            return ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: records.length,
+              itemBuilder: (context, index) {
+                final r = records[index];
+                return Card(
+                  margin:
+                      const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.pink.shade100,
+                      child: Text('${r.id}',
+                          style: const TextStyle(color: Colors.black)),
+                    ),
+                    title: Text('${r.a}x² + ${r.b}x + ${r.c} = 0'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            'Дискриминант: ${r.discriminant.toStringAsFixed(3)}'),
+                        Text('Результат: ${r.result}'),
+                        Text(r.dateTime,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                    isThreeLine: true,
+                  ),
+                );
+              },
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
     );
   }
